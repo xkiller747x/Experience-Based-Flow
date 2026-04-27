@@ -60,6 +60,7 @@ temp/
 data/generated/
 data/tmp/
 data/temp/
+data/cases/
 
 # Large model/checkpoint artifacts
 models/
