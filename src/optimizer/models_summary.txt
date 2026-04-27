@@ -1,0 +1,1 @@
+﻿Vehicle(id:str, capacityweight:float, capacityvolume:float, currentlocation:str, speed:float, costper_km:float, available:bool); Order(id:str, weight:float, volume:float, pickup:str, delivery:str, pickupwindow:TimeWindow, deliverywindow:TimeWindow, priority:int, created_at:float, cancelled:bool, assignedvehicle:str|None)
