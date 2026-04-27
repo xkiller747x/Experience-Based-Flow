@@ -1,0 +1,97 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and local Python config
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+build/
+dist/
+pip-wheel-metadata/
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+config/llm.local.json
+config/*.local.json
+!config/*.example.json
+*.pem
+*.key
+*.crt
+secrets.*
+
+# Jupyter and notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs and runtime files
+*.log
+logs/
+*.pid
+*.seed
+
+# Local app/database/vector-store files
+*.db
+*.sqlite
+*.sqlite3
+chroma/
+chroma_db/
+milvus_data/
+pgdata/
+
+# Generated experiment outputs and temporary data
+outputs/
+results/
+runs/
+artifacts/
+tmp/
+temp/
+data/generated/
+data/tmp/
+data/temp/
+
+# Large model/checkpoint artifacts
+models/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.gguf
+*.bin
+
+# LaTeX generated files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

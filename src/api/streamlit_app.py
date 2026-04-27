@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.simulation import SimulationConfig, LogisticsSimulator, Event, EventType
 from src.optimizer.vrp_solver import ORToolsSolver
@@ -24,10 +24,10 @@ st.set_page_config(
 
 @st.cache_resource
 def get_llm():
-    api_key = os.environ.get("DOUBAN_API_KEY", "5f0d1c05-af99-4fb7-939d-e6529a31b04e")
-    if not api_key:
+    try:
+        return LLMGateway()
+    except ValueError:
         return None
-    return LLMGateway(provider="douban", api_key=api_key, timeout=120)
 
 
 def run_simulation(num_vehicles: int, num_orders: int, area_size_km: float, seed: int):
@@ -147,7 +147,7 @@ st.header("3. 异常检测 & 决策")
 if "event" in st.session_state:
     llm = get_llm()
     if llm is None:
-        st.error("请设置环境变量 DOUBAN_API_KEY")
+        st.error("请先复制 config/llm.local.example.json 为 config/llm.local.json，并填写模型与 API Key")
     else:
         event = st.session_state["event"]
         simulator = st.session_state["simulator"]

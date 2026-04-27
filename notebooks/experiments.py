@@ -20,8 +20,7 @@ from src.agent import AnomalyDetector, DecisionMaker, LLMGateway, LLMError
 
 # ── Config ────────────────────────────────────────────────────────────
 
-API_KEY = os.environ.get("DOUBAN_API_KEY", "5f0d1c05-af99-4fb7-939d-e6529a31b04e")
-LLM = LLMGateway(provider="douban", api_key=API_KEY, timeout=120)
+LLM = LLMGateway()
 
 CASE_RETRIEVER = CaseRetriever()
 RULE_RETRIEVER = RuleRetriever()

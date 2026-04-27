@@ -139,5 +139,5 @@ def ndcg_at_k(sorted_cases, gt_action, k=5):
 完成代码后，运行：
 ```
 cd D:\Code\logistic-ai
-$env:DOUBAN_API_KEY='5f0d1c05-af99-4fb7-939d-e6529a31b04e' & python notebooks/paper_data_generator.py
+python notebooks/paper_data_generator.py
 ```

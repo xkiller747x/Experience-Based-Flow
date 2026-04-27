@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
 # Ensure src/ is on path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,10 +45,10 @@ app.add_middleware(
 # ── Helpers ───────────────────────────────────────────────────────────
 
 def _make_llm() -> LLMGateway:
-    api_key = os.environ.get("DOUBAN_API_KEY", "5f0d1c05-af99-4fb7-939d-e6529a31b04e")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="DOUBAN_API_KEY environment variable not set")
-    return LLMGateway(provider="douban", api_key=api_key, timeout=120)
+    try:
+        return LLMGateway()
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _event_type_from_str(type_str: str) -> EventType:

@@ -101,22 +101,13 @@ def main() -> None:
 
     # ── 4. Initialize LLM gateway ─────────────────────────────────────
     print("\n[4] Initializing LLM gateway...")
-    provider = os.environ.get("LLM_PROVIDER", "douban")
-    api_key = os.environ.get("DOUBAN_API_KEY", "5f0d1c05-af99-4fb7-939d-e6529a31b04e")
-
-    if provider == "local":
-        print("    Provider: local (llama.cpp at localhost:8080)")
-        llm = LLMGateway(provider="local")
-    elif provider == "douban":
-        model = os.environ.get("DOUBAN_MODEL", "doubao-seed-1-8")
-        print(f"    Provider: douban (model: {model})")
-        llm = LLMGateway(provider="douban", api_key=api_key, model=model)
-    else:
-        print("    ERROR: DOUBAN_API_KEY is not set.")
-        print("    Set the following to run this test:")
-        print("      - Windows PowerShell: $env:DOUBAN_API_KEY='your-key'")
-        print("      - Or set LLM_PROVIDER=local if llama.cpp server is running")
+    try:
+        llm = LLMGateway()
+    except ValueError as exc:
+        print(f"    ERROR: {exc}")
+        print("    Copy config/llm.local.example.json to config/llm.local.json and fill in your settings.")
         sys.exit(1)
+    print(f"    Provider: {llm.provider}")
 
     # ── 5. Anomaly detection ──────────────────────────────────────────
     print("\n[5] Running AnomalyDetector on the breakdown event...")

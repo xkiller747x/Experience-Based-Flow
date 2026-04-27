@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
 from typing import Literal
+
+from src.agent.config import load_llm_config
 
 
 @dataclass
@@ -16,7 +17,7 @@ class LLMResponse:
 
     content: str
     raw: str
-    provider: Literal["openai", "local"]
+    provider: Literal["openai", "local", "douban"]
 
 
 class LLMGateway:
@@ -27,37 +28,38 @@ class LLMGateway:
     - Douban/Volcengine (provider="douban", ark.cn-beijing.volces.com)
 
     Args:
-        provider: "openai", "local", or "douban". Defaults to "douban".
-        api_key: API key. If None, read from environment variable.
-        local_url: URL for local llama.cpp server. Defaults to "http://localhost:8080".
-        model: Model name. Defaults to "doubao-seed-1-8".
-        timeout: Request timeout in seconds. Defaults to 120.
+        provider: "openai", "local", or "douban". If None, read from local config.
+        api_key: API key. If None, read from local config.
+        local_url: URL for local llama.cpp server. If None, read from local config.
+        model: Model name. If None, read from local config.
+        timeout: Request timeout in seconds. If None, read from local config.
     """
 
     def __init__(
         self,
-        provider: Literal["openai", "local", "douban"] = "douban",
+        provider: Literal["openai", "local", "douban"] | None = None,
         api_key: str | None = None,
         local_url: str | None = None,
         model: str | None = None,
         timeout: int | None = None,
     ) -> None:
-        self.provider = provider
-        self._api_key = api_key or os.environ.get("DOUBAN_API_KEY", "5f0d1c05-af99-4fb7-939d-e6529a31b04e")
-        self._local_url = (local_url or "http://localhost:8080").rstrip("/")
-        self._model = model or "doubao-seed-1-8-251228"
-        self._timeout = timeout if timeout is not None else 120
-        self._base_url = os.environ.get("DOUBAN_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+        config = load_llm_config()
+        self.provider = provider or config.provider
+        self._api_key = api_key if api_key is not None else config.api_key
+        self._local_url = (local_url or config.local_url).rstrip("/")
+        self._model = model or config.model
+        self._timeout = timeout if timeout is not None else config.timeout
+        self._base_url = config.base_url
 
         if self.provider == "openai" and not self._api_key:
             raise ValueError(
-                "OPENAI_API_KEY environment variable is not set and no api_key was provided. "
-                "Set the environment variable or pass api_key explicitly."
+                "OpenAI api_key is not set. Add it to config/llm.local.json "
+                "or pass api_key explicitly."
             )
         if self.provider == "douban" and not self._api_key:
             raise ValueError(
-                "DOUBAN_API_KEY environment variable is not set and no api_key was provided. "
-                "Set the environment variable or pass api_key explicitly."
+                "Douban api_key is not set. Add it to config/llm.local.json "
+                "or pass api_key explicitly."
             )
         if self.provider not in {"openai", "local", "douban"}:
             raise ValueError(f"provider must be 'openai', 'local', or 'douban', got '{provider}'")
