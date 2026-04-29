@@ -1,5 +1,5 @@
 # Python bytecode and caches
-__pycache__/
+**/__pycache__/*
 *.py[cod]
 *$py.class
 .pytest_cache/
@@ -62,6 +62,21 @@ data/tmp/
 data/temp/
 data/cases/
 
+# Notebook/script experiment result artifacts
+notebooks/*.json
+notebooks/*.csv
+notebooks/*.png
+notebooks/*.svg
+notebooks/*.pdf
+notebooks/paper/
+notebooks/paper_spec.txt
+src/utils/paper_*.py
+scripts/test_llm_api.py
+
+# Paper sources and generated manuscript assets
+paper/
+paper_output/
+
 # Large model/checkpoint artifacts
 models/
 checkpoints/
@@ -72,6 +87,9 @@ checkpoints/
 *.onnx
 *.gguf
 *.bin
+*.pkl
+*.joblib
+*.pickle
 
 # LaTeX generated files
 *.aux

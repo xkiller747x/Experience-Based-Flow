@@ -782,5 +782,5 @@ if __name__ == "__main__":
     mp.freeze_support()
 
     output = Path(__file__).parent.parent.parent / "data" / "cases" / "cases.jsonl"
-    generate_all(output, total=1000000, num_workers=2, chunk_size=SAVE_EVERY)
+    generate_all(output, total=500000, num_workers=8, chunk_size=SAVE_EVERY)
 
