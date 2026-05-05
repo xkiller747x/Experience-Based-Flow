@@ -61,12 +61,12 @@ class ORToolsSolver(VRPSolver):
 
     def __init__(
         self,
-        time_limit_seconds: int = 10,
+        time_limit_seconds: float = 10,
         distance_scale: int = 1000,
         capacity_scale: int = 1000,
         drop_penalty: int = 1_000_000_000,
     ) -> None:
-        self.time_limit_seconds = max(1, time_limit_seconds)
+        self.time_limit_seconds = max(0.001, float(time_limit_seconds))
         self.distance_scale = distance_scale
         self.capacity_scale = capacity_scale
         self.drop_penalty = drop_penalty
@@ -209,7 +209,9 @@ class ORToolsSolver(VRPSolver):
         search_parameters.local_search_metaheuristic = (
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
-        search_parameters.time_limit.FromSeconds(self.time_limit_seconds)
+        time_limit_ms = max(1, int(round(self.time_limit_seconds * 1000)))
+        search_parameters.time_limit.seconds = time_limit_ms // 1000
+        search_parameters.time_limit.nanos = (time_limit_ms % 1000) * 1_000_000
 
         solution = routing.SolveWithParameters(search_parameters)
         if solution is None:
