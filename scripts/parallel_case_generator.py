@@ -78,11 +78,23 @@ def worker(args):
 
 
 def main():
-    total = 1_000_000
-    num_workers = 10
+    argparse = __import__("argparse")
+    parser = argparse.ArgumentParser(description="Generate solver-driven logistics cases in parallel.")
+    parser.add_argument("--count", type=int, default=30000, help="number of cases to generate")
+    parser.add_argument("--seed", type=int, default=20260428)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=REPO_ROOT / "data" / "cases" / "cases_30k.jsonl",
+    )
+    cli_args = parser.parse_args()
+
+    total = cli_args.count
+    num_workers = cli_args.workers
     per_worker = total // num_workers
-    seed = 20260428
-    output_path = REPO_ROOT / "data" / "cases" / "cases_v2_solver.jsonl"
+    seed = cli_args.seed
+    output_path = cli_args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Generating {total} solver-driven cases with {num_workers} workers...")

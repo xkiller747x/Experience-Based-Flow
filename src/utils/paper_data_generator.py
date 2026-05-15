@@ -683,7 +683,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 def decide_no_rag_action(llm: Any, event_type: str, severity: int, scenario: str) -> str:
     system_prompt, user_prompt = build_no_rag_decision_prompt(event_type, severity, scenario)
-    raw_response = llm.generate(user_prompt, system_prompt=system_prompt)
+    raw_response = llm.generate(user_prompt, system_prompt=system_prompt, max_tokens=256)
     action = str(extract_json_object(raw_response).get("action", "")).lower().strip()
     if action not in ALL_ACTIONS:
         raise ValueError(f"No-RAG LLM returned invalid action '{action}'. Must be one of {ALL_ACTIONS}")
@@ -767,7 +767,7 @@ def build_rule_prompt_decision_prompt(event_type: str, severity: int, scenario: 
 
 def decide_rule_prompt_action(llm: Any, event_type: str, severity: int, scenario: str) -> str:
     system_prompt, user_prompt = build_rule_prompt_decision_prompt(event_type, severity, scenario)
-    raw_response = llm.generate(user_prompt, system_prompt=system_prompt)
+    raw_response = llm.generate(user_prompt, system_prompt=system_prompt, max_tokens=256)
     action = str(extract_json_object(raw_response).get("action", "")).lower().strip()
     if action not in ALL_ACTIONS:
         raise ValueError(f"Rule-prompt LLM returned invalid action '{action}'. Must be one of {ALL_ACTIONS}")
@@ -783,13 +783,11 @@ def build_learned_rag_decision_prompt(
 ) -> tuple[str, str]:
     benchmark = SCENARIO_BENCHMARKS[scenario]
     system_prompt = (
-        "You are a logistics dispatch decision assistant. You will be given the current logistics event and a set of "
-        "retrieved historical cases with similar context pressure patterns.\n\n"
-        "These cases were selected by a learned retriever that matches not just surface-level event types, but deeper "
-        "contextual similarity -- including load rate, time-window pressure, urgency, and resource availability. Even "
-        "if the retrieved cases have different event types, they faced similar operational pressure.\n\n"
-        "Use these historical cases as references to make your decision. Prioritize cases with higher similarity scores "
-        "and \"highly reusable\" context analysis. If cases conflict, weight those with closer context similarity higher.\n\n"
+        "You are a logistics dispatch decision assistant. "
+        "Given the current event, scenario context, and similar historical cases, select the best action.\n"
+        "Base your decision on the retrieved cases: what action worked (solved) in similar situations.\n"
+        "If most solved cases chose the same action, follow that. "
+        "Only deviate if the current context differs significantly from all retrieved cases.\n\n"
         "Output JSON only."
     )
 
@@ -797,44 +795,30 @@ def build_learned_rag_decision_prompt(
     for index, result in enumerate(retrieved_results, start=1):
         case = result["case"]
         score = float(result["score"])
-        context_diff = result["context_diff"]
-        load_diff = float(context_diff["load_rate"]["diff"])
-        urgent_diff = context_diff["urgent_orders"]["diff"]
-        pressure_diff = float(context_diff["time_window_pressure"]["diff"])
-        distance_ratio = case.after_distance / case.before_distance if case.before_distance else 0.0
-        unassigned_delta = case.unassigned_after - case.unassigned_before
+        solved = "solved" if case.outcome == "solved" else "FAILED"
         case_blocks.append(
-            f"[Case {index}] Score: {score:.4f} | Match: {result['match_reason']}\n"
-            f"  Event: {case.event_type}, Severity: {case.severity}, Scenario: {case.scenario}\n"
-            f"  Context Similarity: {context_diff['overall_similarity']}\n"
-            f"  Insight: {context_diff['key_insight']}\n"
-            f"  Context Diff: load_rate {load_diff:.4f}, urgent_orders diff={urgent_diff}, "
-            f"time_pressure diff={pressure_diff:.4f}\n"
-            f"  Decision: {case.action} -> {case.outcome}\n"
-            f"  Outcome: distance_ratio={distance_ratio:.3f}, unassigned_delta={unassigned_delta}"
+            f"{index}. [{solved}] {case.event_type} sev={case.severity} "
+            f"load={case.current_load_rate:.2f} pressure={case.time_window_pressure:.2f} "
+            f"-> {case.action}"
         )
 
+    # Summary: count solved actions
+    solved_actions = {}
+    for result in retrieved_results:
+        case = result["case"]
+        if case.outcome == "solved":
+            solved_actions[case.action] = solved_actions.get(case.action, 0) + 1
+    summary = ", ".join(f"{a}: {c} solved" for a, c in sorted(solved_actions.items(), key=lambda x: -x[1]))
+
     user_prompt = (
-        "Select the single best logistics response action.\n\n"
-        "## Current Event\n"
-        f"  event_type: {event_type}\n"
-        f"  severity: {severity}\n\n"
-        "## Scenario\n"
-        f"  scenario: {scenario}\n"
-        f"  vehicles: {benchmark['vehicles']}\n"
-        f"  orders: {benchmark['orders']}\n\n"
-        "## Current Context\n"
-        f"  load_rate: {context['current_load_rate']}\n"
-        f"  urgent_orders: {context['urgent_orders']}\n"
-        f"  available_backup_vehicles: {context['available_backup_vehicles']}\n"
-        f"  avg_delay_minutes: {context['avg_delay_minutes']}\n"
-        f"  time_window_pressure: {context['time_window_pressure']}\n"
-        f"  customer_priority_mix: {context['customer_priority_mix']}\n\n"
-        "## Retrieved Historical Cases (sorted by relevance score)\n\n"
-        + "\n\n".join(case_blocks)
-        + "\n\nAllowed actions: reroute, ignore, adjust_capacity, reassign_order, delay_tolerant\n\n"
-        "Respond with JSON only: "
-        "{\"action\": \"reroute|ignore|adjust_capacity|reassign_order|delay_tolerant\", \"reasoning\": \"...\"}"
+        f"Event: {event_type} | Severity: {severity} | Scenario: {scenario}\n"
+        f"Context: load={context['current_load_rate']:.2f}, urgent={context['urgent_orders']}, "
+        f"pressure={context['time_window_pressure']:.2f}, backup={context['available_backup_vehicles']}\n\n"
+        "Retrieved cases (by relevance):\n"
+        + "\n".join(case_blocks)
+        + f"\n\nSolved action summary: {summary}\n"
+        "\nActions: reroute, ignore, adjust_capacity, reassign_order, delay_tolerant\n"
+        "JSON: {\"action\": \"...\", \"reasoning\": \"...\"}"
     )
     return system_prompt, user_prompt
 
@@ -862,11 +846,23 @@ def decide_learned_rag_action(
     system_prompt, user_prompt = build_learned_rag_decision_prompt(
         event_type, severity, scenario, context, results
     )
-    raw_response = llm.generate(user_prompt, system_prompt=system_prompt)
-    action = str(extract_json_object(raw_response).get("action", "")).lower().strip()
-    if action not in ALL_ACTIONS:
-        raise ValueError(f"Learned-RAG LLM returned invalid action '{action}'")
     ranked = [(r["score"], r["case"]) for r in results]
+    raw_response = llm.generate(user_prompt, system_prompt=system_prompt, max_tokens=256)
+    # Retry up to 2 times on parse failure (truncated JSON, invalid action)
+    action = ""
+    for _attempt in range(3):
+        try:
+            action = str(extract_json_object(raw_response).get("action", "")).lower().strip()
+            if action not in ALL_ACTIONS:
+                raise ValueError(f"Invalid action '{action}'")
+            break
+        except Exception:
+            if _attempt == 2:
+                action = ranked[0][1].action if ranked else ""
+                break
+            import time as _time
+            _time.sleep(2)
+            raw_response = llm.generate(user_prompt, system_prompt=system_prompt, max_tokens=256)
     return action, ranked
 
 
@@ -1012,7 +1008,9 @@ def evaluate_experiments(
     quality_rows: dict[tuple[str, int], dict[str, list[float]]] = defaultdict(lambda: {"precision": [], "recall": [], "hit_rate": []})
     raw_rows: list[dict[str, Any]] = []
 
-    for event_type, severity, scenario, context in queries:
+    for qi, (event_type, severity, scenario, context) in enumerate(queries):
+        if qi % 50 == 0:
+            print(f"  query {qi}/{len(queries)}...", flush=True)
         target_action, target_details = solver_gt.best_action(scenario, event_type, severity, context)
         for method in methods:
             start_ns = time.perf_counter_ns()

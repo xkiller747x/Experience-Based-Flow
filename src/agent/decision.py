@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from src.agent.llm import LLMGateway
 from src.agent.prompts import ActionType, build_decision_prompt
 from src.rag import RetrievedCase, RetrievedRule
+
+if TYPE_CHECKING:
+    from src.rag.negative_aware_retriever import DualRetrievalResult
 
 
 @dataclass
@@ -56,6 +59,7 @@ class DecisionMaker:
         vehicles: list,
         retrieved_cases: list[RetrievedCase] | None = None,
         retrieved_rules: list[RetrievedRule] | None = None,
+        dual_retrieval_result: "DualRetrievalResult" | None = None,
     ) -> DecisionResult:
         """
         Recommend a response action for an anomaly given the current routing plan.
@@ -88,6 +92,7 @@ class DecisionMaker:
             orders=orders,
             retrieved_cases=retrieved_cases,
             retrieved_rules=retrieved_rules,
+            dual_retrieval_result=dual_retrieval_result,
         )
 
         raw_response = self._llm.generate(user_prompt, system_prompt=system_prompt)

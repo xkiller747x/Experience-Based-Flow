@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.simulation.models import Event, Vehicle
     from src.rag.case_retriever import RetrievedCase
+    from src.rag.negative_aware_retriever import DualRetrievalResult
     from src.rag.rule_retriever import RetrievedRule
 
 
@@ -227,6 +228,48 @@ DECISION_MAKING_TEMPLATE = PromptTemplate(
 )
 
 
+NEGATIVE_AWARE_DECISION_TEMPLATE = PromptTemplate(
+    system_template=(
+        "你是一个物流调度顾问。基于历史案例的成功经验和失败教训，"
+        "为当前异常推荐最佳行动。\n"
+        "\n"
+        "可选行动：\n"
+        '  - "reroute": 重新优化受影响车辆路线\n'
+        '  - "ignore": 无需处理\n'
+        '  - "adjust_capacity": 调整车辆容量分配\n'
+        '  - "reassign_order": 将订单重新分配给其他车辆\n'
+        '  - "delay_tolerant": 接受延迟\n'
+        "\n"
+        "关键规则：\n"
+        "1. 优先采取成功案例中高频出现的行动\n"
+        "2. 严格避免采取失败案例中出现过的行动\n"
+        "3. 如果成功案例的行动建议不一致，结合当前 severity 和 load_rate 判断\n"
+        "4. 只输出 JSON，不要有其他文字\n"
+    ),
+    user_template=(
+        "## 当前异常\n"
+        "  event_type: {event_type}\n"
+        "  severity: {severity}\n"
+        "  scenario: {scenario}\n"
+        "  current_load_rate: {current_load_rate}\n"
+        "  available_backup_vehicles: {available_backup_vehicles}\n"
+        "  time_window_pressure: {time_window_pressure}\n"
+        "  avg_delay_minutes: {avg_delay_minutes}\n"
+        "  urgent_orders: {urgent_orders}\n"
+        "  customer_priority_mix: {customer_priority_mix}\n"
+        "\n"
+        "## 成功经验（类似情况下成功的案例）\n"
+        "{success_cases_block}\n"
+        "\n"
+        "## 失败教训（类似情况下失败的案例，请避免这些行动）\n"
+        "{failure_cases_block}\n"
+        "\n"
+        "请基于以上正负经验推荐最佳行动。"
+        '输出 JSON: {{"action": "...", "reasoning": "...", "reroute_needed": true/false}}'
+    ),
+)
+
+
 def build_anomaly_prompt(
     event: "Event",
     current_time: float,
@@ -268,6 +311,7 @@ def build_decision_prompt(
     orders: list,
     retrieved_cases: list["RetrievedCase"] | None = None,
     retrieved_rules: list["RetrievedRule"] | None = None,
+    dual_retrieval_result: "DualRetrievalResult" | None = None,
 ) -> tuple[str, str]:
     """Render the decision-making prompt for an anomaly and routing plan."""
 
@@ -293,6 +337,37 @@ def build_decision_prompt(
         f"available={v.available}, cost_per_km={v.costper_km:.2f}"
         for v in vehicles
     )
+
+    context = anomaly_result.get("context", {}) or {}
+    if dual_retrieval_result is not None:
+        system, user = NEGATIVE_AWARE_DECISION_TEMPLATE.build(
+            event_type=anomaly_result.get("event_type", "unknown"),
+            severity=anomaly_result.get("severity", 0),
+            scenario=anomaly_result.get("scenario", "unknown"),
+            current_load_rate=_get_context_value(
+                anomaly_result, context, "current_load_rate"
+            ),
+            available_backup_vehicles=_get_context_value(
+                anomaly_result, context, "available_backup_vehicles"
+            ),
+            time_window_pressure=_get_context_value(
+                anomaly_result, context, "time_window_pressure"
+            ),
+            avg_delay_minutes=_get_context_value(
+                anomaly_result, context, "avg_delay_minutes"
+            ),
+            urgent_orders=_get_context_value(anomaly_result, context, "urgent_orders"),
+            customer_priority_mix=_get_context_value(
+                anomaly_result, context, "customer_priority_mix"
+            ),
+            success_cases_block=_format_retrieved_case_block(
+                dual_retrieval_result.success_cases
+            ),
+            failure_cases_block=_format_retrieved_case_block(
+                dual_retrieval_result.failure_cases
+            ),
+        )
+        return system, user
 
     unassigned = getattr(route_plan, "unassigned_order_ids", [])
     system, user = DECISION_MAKING_TEMPLATE.build(
@@ -323,6 +398,28 @@ def build_decision_prompt(
         for rr in retrieved_rules:
             r = rr.rule
             rules_section += f"- [{r.category.upper()}] {r.explanation} (recommended action: {r.action}, priority={r.priority})\n"
-        user_prompt += rules_section
+        user += rules_section
 
     return system, user
+
+
+def _get_context_value(anomaly_result: dict, context: dict, key: str) -> object:
+    return anomaly_result.get(key, context.get(key, 0))
+
+
+def _format_retrieved_case_block(cases: list["RetrievedCase"]) -> str:
+    if not cases:
+        return "  (none)"
+
+    lines = []
+    for index, item in enumerate(cases, start=1):
+        case = item.case
+        lines.append(
+            f"  Case {index}: event={case.event_type}, severity={case.severity}, "
+            f"scenario={case.scenario}, outcome={case.outcome}, action={case.action}, "
+            f"score={item.score:.4f}, load_rate={case.current_load_rate}, "
+            f"backup={case.available_backup_vehicles}, pressure={case.time_window_pressure}, "
+            f"delay={case.avg_delay_minutes}, urgent={case.urgent_orders}, "
+            f"priority_mix={case.customer_priority_mix}, reasoning={case.reasoning}"
+        )
+    return "\n".join(lines)
