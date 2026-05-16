@@ -14,7 +14,7 @@ import random
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -212,16 +212,35 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20260428)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "output" / "se_rag_eval")
     parser.add_argument("--cases-path", type=Path, default=Path(DEFAULT_CASES_PATH))
+    parser.add_argument(
+        "--ablation",
+        type=str,
+        default="none",
+        choices=["none", "no_lift", "no_contrast", "no_hierarchy"],
+    )
+    parser.add_argument("--rule-base-path", type=Path, default=None)
+    parser.add_argument("--causal-graph-path", type=Path, default=None)
     args = parser.parse_args()
 
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Ablation mode: {args.ablation}")
+
+    if (args.rule_base_path is None) != (args.causal_graph_path is None):
+        parser.error("--rule-base-path and --causal-graph-path must be provided together")
 
     # Phase 1 + 2: Offline mining
-    rule_base_path = output_dir / "rule_base.json"
-    causal_graph_path = output_dir / "causal_graph.json"
+    rule_base_path = args.rule_base_path or output_dir / "rule_base.json"
+    causal_graph_path = args.causal_graph_path or output_dir / "causal_graph.json"
+    use_external_artifacts = args.rule_base_path is not None and args.causal_graph_path is not None
 
-    if rule_base_path.exists():
+    if use_external_artifacts:
+        from src.rag.causal_extractor import CausalGraph
+        print(f"Loading existing rule base from {rule_base_path}")
+        rule_base = MinedRuleBase.load(rule_base_path)
+        print(f"Loading existing causal graph from {causal_graph_path}")
+        causal_graph = CausalGraph.load(causal_graph_path)
+    elif rule_base_path.exists():
         print(f"Loading existing rule base from {rule_base_path}")
         rule_base = MinedRuleBase.load(rule_base_path)
     else:
@@ -231,7 +250,9 @@ def main() -> None:
         rule_base.save(rule_base_path)
         print(f"Mined {len(rule_base.rules)} rules → {rule_base_path}")
 
-    if causal_graph_path.exists():
+    if use_external_artifacts:
+        pass
+    elif causal_graph_path.exists():
         from src.rag.causal_extractor import CausalGraph
         print(f"Loading existing causal graph from {causal_graph_path}")
         causal_graph = CausalGraph.load(causal_graph_path)
@@ -242,8 +263,26 @@ def main() -> None:
         causal_graph.save(causal_graph_path)
         print(f"Found {len(causal_graph.edges)} edges → {causal_graph_path}")
 
+    if args.ablation == "no_hierarchy":
+        max_len_per_group: dict[tuple[str, str], int] = defaultdict(int)
+        for rule in rule_base.rules:
+            key = (rule.event_type, rule.action)
+            max_len_per_group[key] = max(max_len_per_group[key], len(rule.conditions))
+
+        filtered = [
+            rule for rule in rule_base.rules
+            if len(rule.conditions) >= max_len_per_group.get((rule.event_type, rule.action), 0)
+        ]
+        print(
+            f"  no_hierarchy: Filtered {len(rule_base.rules)} rules -> {len(filtered)} "
+            "(kept only most specific per (ET, action))"
+        )
+        rule_base.rules = filtered
+
     # Phase 3: Online matcher
     matcher = RuleMatcher(rule_base, causal_graph)
+    if args.ablation == "no_lift":
+        matcher._hard_action_threshold = 0.0
     fallback_retriever = CaseRetriever(str(args.cases_path))
     build_index = getattr(fallback_retriever, "build_index", None)
     if callable(build_index):
@@ -347,6 +386,8 @@ def main() -> None:
                         query["scenario"],
                         query["context"],
                     )
+                    if args.ablation == "no_contrast":
+                        evidence.contrast_rules = []
                     # Save evidence for analysis
                     evidence_path = output_dir / f"evidence_{query['query_id']}.json"
                     if qi <= 5:  # Only save first 5 for inspection

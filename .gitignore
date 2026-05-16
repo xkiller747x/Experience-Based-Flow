@@ -119,3 +119,13 @@ desktop.ini
 *~
 
 data/rules/rules.jsonl
+
+
+# Ablation experiments output
+output/ablation/
+
+# HEARTBEAT (OpenClaw workspace file)
+HEARTBEAT.md
+
+# Temporary utility scripts
+scripts/tmp_*.py
