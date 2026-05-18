@@ -1,5 +1,7 @@
 # Logistic-AI: SE-RAG for Logistics Anomaly Dispatch
 
+> [🇬🇧 English](README.md) | [🇨🇳 中文](README.zh-CN.md)
+
 Structured Experience-Augmented Generation (SE-RAG) for anomaly dispatch in logistics — a RAG-based decision framework that combines rule mining, causal reasoning, and LLM inference.
 
 [![arXiv](https://img.shields.io/badge/arXiv-xxxx.xxxxx-b31b1b)](https://arxiv.org/abs/xxxx.xxxxx)
@@ -166,7 +168,7 @@ python run.py evaluate-se-rag --help
 - `scripts/*.py` — experiment scripts
 - `config/*.example.json`
 - `docs/`
-- `README.md`
+- `README.md`, `README.zh-CN.md`
 - `architecture.png`
 
 **Do not commit:**
