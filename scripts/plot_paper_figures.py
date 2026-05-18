@@ -46,6 +46,15 @@ METHOD_COLORS = {
     "tfidf_rag": COLORS["soft"],
 }
 
+DISPLAY_NAMES = {
+    "SE-RAG": "SE-RAG",
+    "se_rag": "SE-RAG",
+    "bm25_rag": "BM25 RAG",
+    "no_rag": "No-RAG",
+    "dense_rag": "Dense RAG",
+    "tfidf_rag": "TF-IDF RAG",
+}
+
 
 def arrow(ax, start, end, color=None, lw=1.45, linestyle="-", arrowstyle="-|>", zorder=3):
     """Draw an arrow segment using FancyArrowPatch."""
@@ -101,8 +110,8 @@ def save_figure(fig, basename):
 
 def generate_multi_gt_comparison():
     methods = ["SE-RAG", "bm25_rag", "no_rag", "dense_rag", "tfidf_rag"]
-    multi_gt = np.array([88.1, 73.4, 69.0, 68.1, 66.0])
-    single = np.array([61.8, 46.4, 22.3, 27.0, 37.3])
+    multi_gt = np.array([90.4, 86.9, 69.8, 76.6, 80.1])
+    single = np.array([63.3, 54.9, 23.5, 30.4, 45.3])
 
     fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
     fig.patch.set_facecolor("white")
@@ -135,12 +144,12 @@ def generate_multi_gt_comparison():
         zorder=3,
     )
 
-    baseline = 69.0
+    baseline = 69.8
     ax.axhline(baseline, color=COLORS["muted"], linestyle=(0, (4, 3)), linewidth=1.15, zorder=2)
     ax.text(
         len(methods) - 0.05,
         baseline + 1.8,
-        "No-RAG baseline (69.0%)",
+        "No-RAG baseline (69.8%)",
         ha="right",
         va="bottom",
         fontsize=9,
@@ -166,7 +175,7 @@ def generate_multi_gt_comparison():
     ax.yaxis.set_major_locator(MultipleLocator(20))
     ax.yaxis.set_major_formatter(FuncFormatter(pct_formatter))
     ax.set_xticks(x)
-    ax.set_xticklabels(methods, fontsize=9, fontweight="bold")
+    ax.set_xticklabels([DISPLAY_NAMES[m] for m in methods], fontsize=9, fontweight="bold")
     ax.tick_params(axis="y", labelsize=9)
     ax.grid(axis="y", color=COLORS["grid"], linestyle="--", linewidth=0.8, zorder=0)
     ax.set_axisbelow(True)
@@ -290,27 +299,20 @@ def style_table(table, n_rows, n_cols, se_rag_row=None):
 
 
 def generate_main_results_table():
-    columns = ["Method", "Multi-GT", "Single (Exact)", "Avg Latency", "Error Rate"]
-    methods = ["no_rag", "tfidf_rag", "dense_rag", "bm25_rag", "se_rag"]
-    single_acc = [22.3, 37.3, 27.0, 46.4, 61.8]
-    multi_acc = [69.0, 66.0, 68.1, 73.4, 88.1]
-    latency_ms = [7121, 9403, 9208, 9299, 5796]
-    error_rate = [0.4, 17.6, 11.1, 15.5, 2.8]
-    display_names = {"se_rag": "SE-RAG"}
-    rows = sorted(
-        zip(methods, single_acc, multi_acc, latency_ms, error_rate),
-        key=lambda item: item[2],
-        reverse=True,
-    )
+    columns = ["Method", "Multi-GT", "Single (Exact)", "Avg Latency"]
+    methods = ["se_rag", "bm25_rag", "dense_rag", "tfidf_rag", "no_rag"]
+    single_acc = [63.3, 54.9, 30.4, 45.3, 23.5]
+    multi_acc = [90.4, 86.9, 76.6, 80.1, 69.8]
+    latency_ms = [7090, 8800, 8810, 8860, 7320]
+    rows = list(zip(methods, single_acc, multi_acc, latency_ms))
     data = [
         [
-            display_names.get(method, method),
+            DISPLAY_NAMES.get(method, method),
             f"{multi:.1f}%",
             f"{single:.1f}%",
             f"{latency / 1000:.2f}s",
-            f"{error:.1f}%",
         ]
-        for method, single, multi, latency, error in rows
+        for method, single, multi, latency in rows
     ]
 
     fig, ax = plt.subplots(figsize=(10, 5), dpi=300)
@@ -324,7 +326,7 @@ def generate_main_results_table():
         colLabels=columns,
         cellLoc="center",
         colLoc="center",
-        colWidths=[0.23, 0.17, 0.21, 0.19, 0.16],
+        colWidths=[0.25, 0.22, 0.27, 0.22],
         bbox=[0.03, 0.08, 0.94, 0.80],
     )
     table.auto_set_font_size(False)
@@ -339,13 +341,13 @@ def generate_main_results_table():
 
 
 def generate_per_action_table():
-    columns = ["Action", "% of Data", "No-RAG", "SE-RAG", "Delta"]
+    columns = ["Action", "N", "No-RAG", "SE-RAG", "Delta"]
     data = [
-        ["delay_tolerant", "45.9%", "65.6%", "95.2%", "+29.6pt"],
-        ["ignore", "2.1%", "41.3%", "89.7%", "+48.4pt"],
-        ["adjust_capacity", "16.4%", "67.0%", "86.7%", "+19.7pt"],
-        ["reassign_order", "22.0%", "69.8%", "87.2%", "+17.4pt"],
-        ["reroute", "13.5%", "85.2%", "84.0%", "-1.2pt"],
+        ["delay_tolerant", "482", "62.6%", "97.4%", "+34.8pt"],
+        ["reassign_order", "228", "78.7%", "85.6%", "+6.9pt"],
+        ["ignore", "28", "65.2%", "78.3%", "+13.0pt"],
+        ["adjust_capacity", "152", "68.6%", "78.0%", "+9.4pt"],
+        ["reroute", "110", "84.8%", "90.2%", "+5.4pt"],
     ]
 
     fig, ax = plt.subplots(figsize=(10, 5), dpi=300)
@@ -359,7 +361,7 @@ def generate_per_action_table():
         colLabels=columns,
         cellLoc="center",
         colLoc="center",
-        colWidths=[0.27, 0.16, 0.17, 0.17, 0.17],
+        colWidths=[0.27, 0.08, 0.17, 0.17, 0.17],
         bbox=[0.03, 0.08, 0.94, 0.80],
     )
     table.auto_set_font_size(False)

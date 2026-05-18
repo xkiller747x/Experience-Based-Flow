@@ -6,6 +6,8 @@ Outputs:
   - paper/fig_confusion_matrix.pdf
 """
 from pathlib import Path
+import csv
+from collections import Counter
 
 import matplotlib
 
@@ -29,20 +31,36 @@ COLORS = {
 }
 
 ACTIONS = ["delay_tolerant", "adjust_capacity", "reassign_order", "reroute", "ignore"]
-CM_DATA = np.array(
-    [
-        [334, 26, 59, 43, 9],
-        [56, 77, 7, 2, 4],
-        [75, 17, 117, 11, 0],
-        [26, 3, 0, 79, 0],
-        [12, 0, 4, 0, 11],
-    ],
-    dtype=int,
-)
+RAW_RESULTS = ROOT / "output" / "ablation" / "v2" / "none" / "raw_results.csv"
+
+
+def load_confusion_matrix():
+    cm = {action: Counter() for action in ACTIONS}
+    errors = 0
+    total = 0
+
+    with RAW_RESULTS.open(encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["method"].strip() != "se_rag":
+                continue
+
+            total += 1
+            if row["error"].strip() != "":
+                errors += 1
+                continue
+
+            gt = row["gt_action"].strip()
+            pred = row["pred_action"].strip()
+            cm[gt][pred] += 1
+
+    data = np.array([[cm[gt][pred] for pred in ACTIONS] for gt in ACTIONS], dtype=int)
+    return data, errors, total
+
+
+CM_DATA, PARSING_ERRORS, TOTAL_QUERIES = load_confusion_matrix()
 
 CLASSIFIED_TOTAL = int(CM_DATA.sum())
-PARSING_ERRORS = 28
-TOTAL_QUERIES = CLASSIFIED_TOTAL + PARSING_ERRORS
 CORRECT = int(np.trace(CM_DATA))
 ACCURACY = CORRECT / CLASSIFIED_TOTAL
 
@@ -110,7 +128,7 @@ def plot_confusion_matrix():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     labels = [pretty_action(action) for action in ACTIONS]
-    fig, ax = plt.subplots(figsize=(8, 7), dpi=300)
+    fig, ax = plt.subplots(figsize=(7, 5.8), dpi=300)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
@@ -130,7 +148,7 @@ def plot_confusion_matrix():
     ax.xaxis.set_label_position("top")
     ax.set_xlabel("Predicted Action", labelpad=14, fontsize=11)
     ax.set_ylabel("True Action", fontsize=11)
-    ax.set_title("Confusion Matrix - SE-RAG (1000 Queries)", fontsize=13, fontweight="bold", pad=34)
+
 
     ax.set_xticks(np.arange(-0.5, len(labels), 1), minor=True)
     ax.set_yticks(np.arange(-0.5, len(labels), 1), minor=True)
@@ -139,18 +157,6 @@ def plot_confusion_matrix():
     ax.tick_params(axis="x", bottom=False, top=True, labeltop=True, labelbottom=False)
 
     annotate_cells(ax, CM_DATA)
-    highlight_diagonal(ax, len(labels))
-
-    ax.text(
-        0.5,
-        -0.12,
-        f"{ACCURACY * 100:.1f}% accuracy ({PARSING_ERRORS}/{TOTAL_QUERIES} parsing errors excluded)",
-        transform=ax.transAxes,
-        ha="center",
-        va="top",
-        fontsize=10,
-        color=COLORS["text"],
-    )
 
     for spine in ax.spines.values():
         spine.set_color(COLORS["grid"])
@@ -158,7 +164,7 @@ def plot_confusion_matrix():
 
     png_path = OUT_DIR / "fig_confusion_matrix.png"
     pdf_path = OUT_DIR / "fig_confusion_matrix.pdf"
-    fig.tight_layout(pad=1.2)
+    fig.tight_layout(pad=0.8)
     fig.savefig(png_path, dpi=300, facecolor="white", bbox_inches="tight")
     fig.savefig(pdf_path, dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig)

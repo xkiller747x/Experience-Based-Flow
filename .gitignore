@@ -129,3 +129,6 @@ HEARTBEAT.md
 
 # Temporary utility scripts
 scripts/tmp_*.py
+
+# Paper generation scripts
+scripts/generate_paper.py
